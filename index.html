@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fala Aí — pronúncia do inglês escrita em português</title>
+  <meta name="description" content="Digite um texto em inglês e veja como pronunciar, escrito do jeito que um brasileiro lê. Sem alfabeto fonético.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <p class="brand">Fala Aí</p>
+      <h1>Leia inglês com sotaque certo, <em>escrito em português</em></h1>
+      <p class="lead">Digite qualquer texto em inglês. A pronúncia aparece escrita com as letras e os sons que você já conhece — sem símbolos fonéticos.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p id="dict-warning" class="warning" hidden>
+      O dicionário de pronúncias ainda não foi gerado, então todas as palavras estão sendo <strong>estimadas</strong>.
+      Rode <code>node tools/build-dict.mjs</code> na pasta do projeto e recarregue a página.
+    </p>
+
+    <section class="panel" aria-labelledby="in-title">
+      <div class="panel-head">
+        <h2 id="in-title">Texto em inglês</h2>
+        <button type="button" id="clear" class="ghost">Limpar</button>
+      </div>
+      <textarea id="input" rows="4" spellcheck="false" lang="en"
+        placeholder="Ex.: Hello! How are you today?"></textarea>
+      <div class="samples" id="samples" aria-label="Exemplos">
+        <span>Experimente:</span>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="out-title">
+      <div class="panel-head">
+        <h2 id="out-title">Como se pronuncia</h2>
+        <div class="actions">
+          <button type="button" id="listen" class="primary">▶ Ouvir</button>
+          <button type="button" id="listen-slow">Ouvir devagar</button>
+          <button type="button" id="copy">Copiar</button>
+        </div>
+      </div>
+
+      <div class="options">
+        <label><input type="checkbox" id="opt-interlinear" checked> Mostrar o inglês acima</label>
+        <label><input type="checkbox" id="opt-separate" checked> Separar sílabas</label>
+        <label><input type="checkbox" id="opt-th"> Simplificar o “th” (t / d)</label>
+      </div>
+
+      <div id="output" class="output" aria-live="polite"></div>
+
+      <p class="hint">
+        <strong>MAIÚSCULAS</strong> = sílaba forte. Clique numa palavra para ouvi-la.
+        <span class="guess-key">Sublinhado pontilhado</span> = palavra fora do dicionário, pronúncia estimada.
+        O botão <span class="alt-key">1/2</span> troca entre pronúncias possíveis da mesma palavra.
+      </p>
+    </section>
+
+    <section class="panel" aria-labelledby="key-title">
+      <h2 id="key-title">Como ler</h2>
+      <p class="muted">Leia tudo como se fosse português. Só estas combinações têm um jeito especial:</p>
+      <div class="table-scroll">
+        <table class="legend">
+          <thead><tr><th>Escrita</th><th>Como falar</th><th>Exemplos</th></tr></thead>
+          <tbody id="legend"></tbody>
+        </table>
+      </div>
+
+      <h3>Cuidados de quem fala português</h3>
+      <ul class="tips">
+        <li><strong>Não acrescente “i” no fim.</strong> <span lang="en">“Big”</span> é <em>big</em>, não “bigui”; <span lang="en">“work”</span> é <em>uârk</em>, não “uârki”.</li>
+        <li><strong>“ti” e “di” são secos</strong>, como no Nordeste ou em Portugal: <span lang="en">“tea”</span> é <em>tii</em>, não “tchii”; <span lang="en">“did”</span> é <em>did</em>, não “djidj”.</li>
+        <li><strong>“m” e “n” finais são pronunciados de verdade</strong>: feche a boca no <em>m</em> de <span lang="en">“him”</span> e encoste a língua no <em>n</em> de <span lang="en">“sun”</span>, em vez de só anasalar a vogal.</li>
+        <li><strong>“l” final não vira “u”</strong>: em <span lang="en">“feel”</span> a língua encosta atrás dos dentes.</li>
+        <li><strong>“s” no começo não ganha “i” antes</strong>: <span lang="en">“stop”</span> é <em>stap</em>, não “istópi”.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Pronúncias do inglês americano, com base no <a href="http://www.speech.cs.cmu.edu/cgi-bin/cmudict" target="_blank" rel="noopener">CMU Pronouncing Dictionary</a>. É uma aproximação para ajudar na fala; use o botão de ouvir para conferir.</p>
+  </footer>
+
+  <script src="data/cmudict.js"></script>
+  <script src="js/converter.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

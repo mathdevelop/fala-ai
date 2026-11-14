@@ -1,0 +1,11 @@
+{
+  "name": "fala-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fala Aí: pronúncia do inglês escrita com os sons do português, sem alfabeto fonético.",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build:dict": "node tools/build-dict.mjs",
+    "test": "node tools/test.mjs"
+  }
+}
