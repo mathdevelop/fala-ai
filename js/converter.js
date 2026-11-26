@@ -263,6 +263,39 @@
     return FRONT_START.has(x.p);
   }
 
+  const isVowel = (x) => !!x && x.s !== null;
+  const SYLLABIC_N_AFTER = new Set(['T', 'D', 'S', 'Z']);
+
+  /** "people", "button": vogal fraca que some antes de L/N no fim da palavra. */
+  function isSyllabicSchwa(ph, i) {
+    const cur = ph[i];
+    const prev = ph[i - 1];
+    const next = ph[i + 1];
+    if (cur.p !== 'AH' || cur.s !== 0 || !prev || isVowel(prev) || !next) return false;
+    // Só no fim da palavra (ou seguido apenas de consoantes: "buttons", "student").
+    if (ph.slice(i + 2).some(isVowel)) return false;
+    if (next.p === 'L') return prev.p !== 'L' && prev.p !== 'R' && prev.p !== 'W' && prev.p !== 'Y';
+    if (next.p === 'N') return SYLLABIC_N_AFTER.has(prev.p);
+    return false;
+  }
+
+  /** Vogal fraca (schwa): é escrita "â" e exibida mais apagada. */
+  function isWeak(ph, i) {
+    return ph[i].p === 'AH' && ph[i].s === 0 && !isSyllabicSchwa(ph, i);
+  }
+
+  /** "water", "city": no inglês americano, o T entre vogais (antes de sílaba fraca) vira um D rápido. */
+  function isFlap(ph, i) {
+    const prev = ph[i - 1];
+    const next = ph[i + 1];
+    if (!prev || !next || !isVowel(next) || next.s === 1) return false;
+    if (!isVowel(prev) && !(prev.p === 'R' && isVowel(ph[i - 2]))) return false;
+    // "button", "certain", "important": antes de vogal fraca + N o T fica preso na garganta, não vira D.
+    const after = ph[i + 2];
+    if (after && after.p === 'N' && next.s === 0 && !isVowel(ph[i + 3])) return false;
+    return true;
+  }
+
   function spell(ph, i, opts) {
     const cur = ph[i];
     const prev = ph[i - 1];
@@ -272,7 +305,12 @@
       // Vogais
       case 'AA': return 'a';
       case 'AE': return 'é';
-      case 'AH': return cur.s ? 'â' : 'a';
+      case 'AH':
+        if (cur.s) return 'â';
+        if (isSyllabicSchwa(ph, i)) return '';
+        // No fim de palavra o brasileiro já lê o "a" fraco (como em "casa").
+        if (i === ph.length - 1 && ph.filter(isVowel).length > 1) return 'a';
+        return 'â';
       case 'AO': return 'ó';
       case 'AW': return 'au';
       case 'AY': return 'ai';
@@ -299,8 +337,9 @@
       case 'M': return 'm';
       case 'N': return 'n';
       case 'NG':
+        // "sing·ing", "sing·er": sem estalar o g. Só "finger", "think" (NG + G/K) viram "n".
         if (next && (next.p === 'K' || next.p === 'G')) return 'n';
-        return startsFront(next) ? 'ngu' : 'ng';
+        return 'ng';
       case 'P': return 'p';
       case 'R': return 'r';
       case 'S': {
@@ -309,7 +348,7 @@
         return vowelBefore && vowelAfter ? 'ss' : 's';
       }
       case 'SH': return 'ch';
-      case 'T': return 't';
+      case 'T': return isFlap(ph, i) ? 'd' : 't';
       case 'TH': return opts.simpleTh ? 't' : 'th';
       case 'V': return 'v';
       case 'W':
@@ -336,18 +375,17 @@
       const end = k + 1 < starts.length ? starts[k + 1] : ph.length;
       let text = '';
       let stressed = false;
+      const parts = []; // trechos com a marca de vogal fraca, para a tela
       for (let i = starts[k]; i < end; i++) {
-        text += spell(ph, i, opts);
+        const piece = spell(ph, i, opts);
+        const weak = isWeak(ph, i);
+        text += piece;
         if (ph[i].s === 1) stressed = true;
+        const last = parts[parts.length - 1];
+        if (last && last.w === weak) last.t += piece;
+        else if (piece) parts.push({ t: piece, w: weak });
       }
-      syllables.push({ t: text, s: stressed });
-    }
-    // "sing·er": o "gu" de apoio vai para a sílaba seguinte (SIN·guer, não SINGU·er).
-    for (let k = 0; k + 1 < syllables.length; k++) {
-      if (syllables[k].t.endsWith('ngu')) {
-        syllables[k].t = syllables[k].t.slice(0, -2);
-        syllables[k + 1].t = 'gu' + syllables[k + 1].t;
-      }
+      syllables.push({ t: text, s: stressed, parts });
     }
     // Monossílabos não recebem marca de tônica.
     if (syllables.length === 1) syllables[0].s = false;
@@ -393,10 +431,38 @@
    * Pronúncias de uma palavra.
    * Retorna { source: 'dict' | 'guess', variants: [ [fonemas...] ] }
    */
+  /** Variante igual à primeira, só que com "u" (UW0) no lugar de uma vogal fraca (AH0). */
+  function isRoundedOf(base, other) {
+    if (base.length !== other.length) return false;
+    let diffs = 0;
+    for (let i = 0; i < base.length; i++) {
+      if (base[i] === other[i]) continue;
+      if (base[i] !== 'AH0' || other[i] !== 'UW0') return false;
+      diffs++;
+    }
+    return diffs === 1;
+  }
+
+  /**
+   * "today", "tomorrow", "document": a vogal fraca aí soa como um "u" curto para o brasileiro.
+   * Mostra primeiro a variante com "u" e mantém a outra como alternativa.
+   */
+  function preferRounded(w, variants) {
+    const list = variants.slice();
+    const first = list[0];
+    // "to-" (today, together, tonight): a vogal fraca puxa para "u".
+    if (w.startsWith('to') && first[0] === 'T' && first[1] === 'AH0' && !list.some((v) => isRoundedOf(first, v))) {
+      list.push(['T', 'UW0'].concat(first.slice(2)));
+    }
+    const idx = list.findIndex((v, i) => i > 0 && isRoundedOf(first, v));
+    if (idx > 0) list.unshift(list.splice(idx, 1)[0]);
+    return list;
+  }
+
   function pronounce(word) {
     const w = word.toLowerCase().replace(/[’‘`]/g, "'");
     let hit = rawLookup(w);
-    if (hit) return { source: 'dict', variants: hit };
+    if (hit) return { source: 'dict', variants: preferRounded(w, hit) };
     const viaInflection = inflected(w);
     if (viaInflection) return { source: 'dict', variants: [viaInflection] };
     // Siglas em maiúsculas (ex.: "NBA"): soletra.

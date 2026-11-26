@@ -2,7 +2,7 @@
 
 Converte texto em inglês na pronúncia **escrita com os sons do português**, sem alfabeto fonético.
 
-`Hello! How are you today?` → `rra·LOU! rrau ar iuu ta·DEI?`
+`Hello! How are you today?` → `rrâ·LOU! rrau ar iuu tu·DEI?`
 
 ## Como usar
 

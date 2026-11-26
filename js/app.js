@@ -23,7 +23,10 @@
     ['ii · uu', 'Vogal comprida: segure o som um pouco mais. Com uma letra só, o som é curtinho.', ['sheep', 'ship', 'food', 'book']],
     ['â', 'Um “a” fechado e curto, como em “câmera” ou “cama”.', ['cup', 'love']],
     ['é · ó', 'Bem abertos, como em “pé” e “pó”.', ['bed', 'cat', 'dog']],
-    ['a (sílaba fraca)', 'Um “a” bem apagado, quase sumindo, como o “a” final de “casa”.', ['about', 'sofa']],
+    ['â apagado', 'Nas sílabas fracas o â aparece mais claro: é curtíssimo e quase some. Nunca abra para “a”.', ['today', 'about', 'police']],
+    ['d entre vogais', 'No inglês americano o “t” entre vogais vira um “d” leve e rápido, quase o “r” de “caro”.', ['water', 'city', 'better']],
+    ['tn · pl', 'Sem vogal no meio: passe direto de uma consoante para a outra, sem acrescentar som.', ['button', 'people', 'little']],
+    ['t · p · k', 'No começo da palavra ou da sílaba forte, saem com um sopro de ar. Por isso o “t” de “today” pode parecer “tch”: mantenha a língua no lugar do “t” e só solte o ar.', ['today', 'time', 'park']],
     ['rr', 'O “r” de “rato” ou “carro”: um sopro vindo da garganta.', ['house', 'hello']],
     ['r', 'Sempre o “r” do interior (“porta” caipira), com a língua enrolada para trás — mesmo no começo da palavra.', ['red', 'car']],
     ['âr · er', 'O mesmo “r” do interior, emendado na vogal.', ['bird', 'teacher']],
@@ -45,8 +48,22 @@
 
   /* ---------------- Renderização ---------------- */
 
-  function sayNode(variant, separate) {
-    const span = document.createElement('span');
+  function appendSyllable(parent, syl) {
+    const parts = syl.parts && syl.parts.length ? syl.parts : [{ t: syl.t, w: false }];
+    for (const part of parts) {
+      if (part.w) {
+        const weak = document.createElement('span');
+        weak.className = 'weak';
+        weak.textContent = part.t;
+        parent.append(weak);
+      } else {
+        parent.append(part.t);
+      }
+    }
+  }
+
+  function sayNode(variant, separate, tag) {
+    const span = document.createElement(tag || 'span');
     span.className = 'say';
     variant.words.forEach((syllables, w) => {
       if (w > 0) span.append(' ');
@@ -62,7 +79,7 @@
           b.textContent = syl.t.toUpperCase();
           span.append(b);
         } else {
-          span.append(syl.t);
+          appendSyllable(span, syl);
         }
       });
     });
@@ -160,9 +177,9 @@
         if (i > 0) td3.append(document.createElement('br'));
         const span = document.createElement('span');
         span.className = 'ex';
-        const say = document.createElement('i');
         const tok = P.convertText(ex, opts)[0];
-        say.textContent = P.formatVariant(tok.variants[0], opts);
+        const say = sayNode(tok.variants[0], true, 'i');
+        say.className = '';
         span.append(ex + ' → ', say);
         td3.append(span);
       });

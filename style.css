@@ -201,6 +201,7 @@ button.ghost { border-color: transparent; color: var(--muted); }
 }
 
 .word .say b { color: var(--accent); }
+.weak { opacity: .5; }
 .word .say .dot { color: var(--muted); opacity: .6; }
 
 .word.guess .say {
@@ -287,6 +288,7 @@ code {
 
 .legend .ex { white-space: nowrap; }
 .legend .ex i { font-family: var(--font-say); }
+.legend .ex .dot { color: var(--muted); }
 
 @media (max-width: 600px) {
   .legend thead { display: none; }
