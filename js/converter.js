@@ -373,6 +373,10 @@
       const m = /^([A-Z]+)([012])?$/.exec(sym);
       return { p: m[1], s: m[2] === undefined ? null : Number(m[2]) };
     });
+    // "around", "salary": o "er" fraco antes de vogal é um â, e o r começa a sílaba seguinte (â·RAUND).
+    for (let i = ph.length - 2; i >= 0; i--) {
+      if (ph[i].p === 'ER' && ph[i].s === 0 && ph[i + 1].s !== null) ph.splice(i, 1, { p: 'AH', s: 0 }, { p: 'R', s: null });
+    }
     const starts = syllableStarts(ph);
     const syllables = [];
     for (let k = 0; k < starts.length; k++) {
@@ -454,6 +458,11 @@
         const c = Number(cents.padEnd(2, '0').slice(0, 2));
         words = words.concat('and', intToWords(c), c === 1 ? 'cent' : 'cents');
       }
+    } else if (/^\d{4}$/.test(m[2]) && m[2] >= '1100' && m[2] <= '2099' && !/^200\d$/.test(m[2])
+      && ['', 's'].includes(suffix)) {
+      // Ano (e milhares redondos): "2027" = twenty twenty-seven, "1990s" = nineteen nineties, "1500" = fifteen hundred.
+      const lo = Number(m[2].slice(2));
+      words = intToWords(Number(m[2].slice(0, 2))).concat(lo === 0 ? ['hundred'] : lo < 10 ? ['oh', ONES[lo]] : intToWords(lo));
     } else {
       words = numberToWords(m[2]);
     }
@@ -481,6 +490,8 @@
     }
     if (word === 'Dr') return pronounce('doctor');
     let hit = rawLookup(w);
+    // O dicionário tem alguns possessivos sem o s final ("cabela's"): completa.
+    if (hit && w.endsWith("'s")) hit = hit.map((v) => (/^[SZ]$/.test(v[v.length - 1]) ? v : addS(v)));
     if (hit) return { source: 'dict', variants: hit };
     const viaInflection = inflected(w);
     if (viaInflection) return { source: 'dict', variants: [viaInflection] };
@@ -533,14 +544,14 @@
       if (/\S/.test(raw)) keptName = false;
       if (/[À-ÖØ-öø-ÿ]/.test(piece) || (opts.keep && opts.keep.has(piece.toLowerCase()))) {
         // Palavra com acento é português ("João", "São"), e opts.keep traz nomes a manter: ficam como estão.
-        tokens.push({ type: 'sep', text: raw });
+        tokens.push({ type: 'sep', text: raw, kept: true });
         keptName = true;
       } else if (/^[A-Za-z]/.test(piece)) {
         const res = pronounce(piece);
         // Nome no meio da frase fora do dicionário ("Pessoa") ou logo depois de um nome mantido
         // ("São Paulo"): fica como está escrito.
         if (/^[A-Z][a-z]/.test(piece) && (wasKept || (res.source === 'guess' && !wasStart))) {
-          tokens.push({ type: 'sep', text: raw });
+          tokens.push({ type: 'sep', text: raw, kept: true });
           keptName = true;
           continue;
         }
@@ -561,6 +572,13 @@
         pushWord({ type: 'word', text: piece, source: 'dict', variants: [{ words }] });
       } else {
         tokens.push({ type: 'sep', text: piece });
+      }
+    }
+    // A palavra com maiúscula logo antes de um nome mantido também é nome ("Joao Pessoa", sem acento).
+    for (let i = tokens.length - 1; i >= 2; i--) {
+      const word = tokens[i - 2];
+      if (tokens[i].kept && /^[ \t]+$/.test(tokens[i - 1].text) && word.type === 'word' && /^[A-Z][a-z]/.test(word.text)) {
+        tokens[i - 2] = { type: 'sep', text: word.text, kept: true };
       }
     }
     return tokens;
