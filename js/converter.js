@@ -427,6 +427,44 @@
     return words;
   }
 
+  const ORDINAL = { one: 'first', two: 'second', three: 'third', five: 'fifth', eight: 'eighth', nine: 'ninth',
+    twelve: 'twelfth' };
+
+  function toOrdinal(word) {
+    if (ORDINAL[word]) return ORDINAL[word];
+    return word.endsWith('y') ? word.slice(0, -1) + 'ieth' : word + 'th';
+  }
+
+  const NUMBER_RE = /^(\$?)(\d+(?:[.,]\d+)*)(?::(\d\d))?(%|[a-z]+)?$/i;
+
+  /** "$15.50", "7:30", "1st", "90s", "10%", "5pm" -> palavras em inglês, como se fala. */
+  function spokenNumber(piece) {
+    const m = NUMBER_RE.exec(piece);
+    const money = m[1] === '$';
+    const suffix = (m[4] || '').toLowerCase();
+    let words;
+    if (m[3] !== undefined) {
+      // Hora: "7:30" = seven thirty, "4:05" = four oh five, "7:00" = seven.
+      const min = Number(m[3]);
+      words = numberToWords(m[2]).concat(min === 0 ? [] : min < 10 ? ['oh', ONES[min]] : intToWords(min));
+    } else if (money) {
+      const [dollars, cents] = m[2].replace(/,(?=\d{3})/g, '').split('.');
+      words = numberToWords(dollars).concat(Number(dollars) === 1 ? 'dollar' : 'dollars');
+      if (cents && Number(cents)) {
+        const c = Number(cents.padEnd(2, '0').slice(0, 2));
+        words = words.concat('and', intToWords(c), c === 1 ? 'cent' : 'cents');
+      }
+    } else {
+      words = numberToWords(m[2]);
+    }
+    const last = words.length - 1;
+    if (['st', 'nd', 'rd', 'th'].includes(suffix)) words[last] = toOrdinal(words[last]);
+    else if (suffix === 's') words[last] = words[last].endsWith('y') ? words[last].slice(0, -1) + 'ies' : words[last] + 's';
+    else if (suffix === '%') words.push('percent');
+    else if (suffix === 'am' || suffix === 'pm') words.push(suffix.toUpperCase());
+    return words;
+  }
+
   /* ---------------------------------------------------------------- */
   /* API principal                                                     */
   /* ---------------------------------------------------------------- */
@@ -437,6 +475,11 @@
    */
   function pronounce(word) {
     const w = word.toLowerCase().replace(/[’‘`]/g, "'");
+    // Siglas de 2 letras viram letras mesmo quando são palavras: "the US", "IT", "7 AM".
+    if (/^[A-Z]{2}$/.test(word)) {
+      return { source: 'dict', variants: [[...LETTER_NAMES[w[0]].split(' '), ...LETTER_NAMES[w[1]].split(' ')]] };
+    }
+    if (word === 'Dr') return pronounce('doctor');
     let hit = rawLookup(w);
     if (hit) return { source: 'dict', variants: hit };
     const viaInflection = inflected(w);
@@ -451,7 +494,11 @@
     return { source: 'guess', variants: [guess(w)] };
   }
 
-  const TOKEN_RE = /[A-Za-z]+(?:['’][A-Za-z]+)*|\d+(?:[.,]\d+)*|\s+|[^\sA-Za-z\d]+/g;
+  // Letras com acento entram na palavra ("João"), para ela não ser cortada no meio.
+  const TOKEN_RE = new RegExp(
+    "[ap]\\.m\\.|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ]+)*" +
+    '|\\$?\\d+(?:[.,]\\d+)*(?::\\d\\d)?(?:%|(?:st|nd|rd|th|s|am|pm)(?![A-Za-z]))?' +
+    '|\\s+|[^\\sA-Za-zÀ-ÖØ-öø-ÿ\\d]+', 'gi');
 
   /**
    * Converte um texto inteiro.
@@ -463,9 +510,40 @@
     opts = opts || {};
     const tokens = [];
     const matches = text.match(TOKEN_RE) || [];
-    for (const piece of matches) {
-      if (/^[A-Za-z]/.test(piece)) {
+    let sentenceStart = true;
+    let afterNumber = false; // "7 am": o am depois de um número é a sigla, não o verbo
+    let keptName = false; // a palavra anterior ficou como estava escrita (nome)
+    const pushWord = (tok) => {
+      // "H-2B", "B1": número e letra grudados ganham um hífen, para não virar uma palavra só.
+      if (tokens.length && tokens[tokens.length - 1].type === 'word') tokens.push({ type: 'sep', text: '-' });
+      tokens.push(tok);
+    };
+    for (const raw of matches) {
+      const wasStart = sentenceStart;
+      const wasAfterNumber = afterNumber;
+      if (/\S/.test(raw)) {
+        sentenceStart = !/^[A-Za-zÀ-ÖØ-öø-ÿ\d$]/.test(raw) && (/[.!?:\n]/.test(raw) || wasStart);
+        afterNumber = /^\$?\d/.test(raw);
+      } else if (/\n/.test(raw)) {
+        sentenceStart = true;
+      }
+      const piece = /^[ap]\.m\.$/i.test(raw) || (wasAfterNumber && /^[ap]m$/i.test(raw))
+        ? raw.replace(/\./g, '').toUpperCase() : raw;
+      const wasKept = keptName;
+      if (/\S/.test(raw)) keptName = false;
+      if (/[À-ÖØ-öø-ÿ]/.test(piece) || (opts.keep && opts.keep.has(piece.toLowerCase()))) {
+        // Palavra com acento é português ("João", "São"), e opts.keep traz nomes a manter: ficam como estão.
+        tokens.push({ type: 'sep', text: raw });
+        keptName = true;
+      } else if (/^[A-Za-z]/.test(piece)) {
         const res = pronounce(piece);
+        // Nome no meio da frase fora do dicionário ("Pessoa") ou logo depois de um nome mantido
+        // ("São Paulo"): fica como está escrito.
+        if (/^[A-Z][a-z]/.test(piece) && (wasKept || (res.source === 'guess' && !wasStart))) {
+          tokens.push({ type: 'sep', text: raw });
+          keptName = true;
+          continue;
+        }
         const seen = new Set();
         const variants = [];
         for (const symbols of res.variants) {
@@ -476,11 +554,11 @@
           seen.add(key);
           variants.push({ words: [syl] });
         }
-        if (variants.length) tokens.push({ type: 'word', text: piece, source: res.source, variants });
-        else tokens.push({ type: 'sep', text: piece });
-      } else if (/^\d/.test(piece)) {
-        const words = numberToWords(piece).map((w) => toSyllables(pronounce(w).variants[0], opts));
-        tokens.push({ type: 'word', text: piece, source: 'dict', variants: [{ words }] });
+        if (variants.length) pushWord({ type: 'word', text: raw, source: res.source, variants });
+        else tokens.push({ type: 'sep', text: raw });
+      } else if (/^\$?\d/.test(piece)) {
+        const words = spokenNumber(piece).map((w) => toSyllables(pronounce(w).variants[0], opts));
+        pushWord({ type: 'word', text: piece, source: 'dict', variants: [{ words }] });
       } else {
         tokens.push({ type: 'sep', text: piece });
       }
