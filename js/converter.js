@@ -290,6 +290,9 @@
     const next = ph[i + 1];
     if (!prev || !next || !isVowel(next) || next.s === 1) return false;
     if (!isVowel(prev) && !(prev.p === 'R' && isVowel(ph[i - 2]))) return false;
+    // "anytime", "military", "hesitate": antes de sílaba com tônica secundária o T continua T.
+    // Exceção: o "o" final de "photo", "potato", "auto", que o dicionário marca como secundário.
+    if (next.s === 2 && !(next.p === 'OW' && !ph.slice(i + 2).some(isVowel))) return false;
     // "button", "certain", "important": antes de vogal fraca + N o T fica preso na garganta, não vira D.
     const after = ph[i + 2];
     if (after && after.p === 'N' && next.s === 0 && !isVowel(ph[i + 3])) return false;
@@ -344,7 +347,8 @@
       case 'R': return 'r';
       case 'S': {
         const vowelBefore = prev && prev.s !== null && prev.p !== 'ER';
-        const vowelAfter = next && next.s !== null;
+        // "lesson": a vogal que some não conta, então fica "LÉ·sn", não "LÉ·ssn".
+        const vowelAfter = isVowel(next) && !isSyllabicSchwa(ph, i + 1);
         return vowelBefore && vowelAfter ? 'ss' : 's';
       }
       case 'SH': return 'ch';
