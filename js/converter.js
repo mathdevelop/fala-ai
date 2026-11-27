@@ -332,7 +332,12 @@
       case 'D': return 'd';
       case 'DH': return opts.simpleTh ? 'd' : 'dh';
       case 'F': return 'f';
-      case 'G': return startsFront(next) ? 'gu' : 'g';
+      case 'G': {
+        // "figure" (FIG·ier): antes de Y o g fecha a sílaba; só "argue" (G + YU na mesma sílaba) pede gu.
+        const after = ph[i + 2];
+        if (next && next.p === 'Y' && !(after && (after.p === 'UW' || after.p === 'UH'))) return 'g';
+        return startsFront(next) ? 'gu' : 'g';
+      }
       case 'HH': return 'rr';
       case 'JH': return 'dj';
       case 'K': return 'k';
@@ -572,6 +577,18 @@
         pushWord({ type: 'word', text: piece, source: 'dict', variants: [{ words }] });
       } else {
         tokens.push({ type: 'sep', text: piece });
+      }
+    }
+    // "Rio de Janeiro", "Silva da Costa": de/da/do/dos/das entre duas palavras com maiúscula é nome em português.
+    const keep = (tok) => ({ type: 'sep', text: tok.text, kept: true });
+    const capital = (tok) => tok && (tok.type === 'word' || tok.kept) && /^[A-Z][a-z]/.test(tok.text);
+    const space = (tok) => tok && /^[ \t]+$/.test(tok.text);
+    for (let i = 2; i + 2 < tokens.length; i++) {
+      if (tokens[i].type === 'word' && /^d[aeo]s?$/.test(tokens[i].text) && space(tokens[i - 1]) && space(tokens[i + 1])
+        && capital(tokens[i - 2]) && capital(tokens[i + 2])) {
+        tokens[i - 2] = keep(tokens[i - 2]);
+        tokens[i] = keep(tokens[i]);
+        tokens[i + 2] = keep(tokens[i + 2]);
       }
     }
     // A palavra com maiúscula logo antes de um nome mantido também é nome ("Joao Pessoa", sem acento).
