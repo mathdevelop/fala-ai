@@ -152,7 +152,7 @@
 
   const GUESS_RULES = [
     ['tion', 'SH AH N'], ['sion', 'ZH AH N'], ['ture', 'CH ER'], ['ough', 'AH F'], ['augh', 'AO'],
-    ['igh', 'AY'], ['tch', 'CH'], ['dge', 'JH'], ['eau', 'OW'],
+    ['igh', 'AY'], ['tch', 'CH'], ['dge', 'JH'], ['eau', 'OW'], ['ae', 'EH'],
     ['ch', 'CH'], ['sh', 'SH'], ['th', 'TH'], ['ph', 'F'], ['wh', 'W'], ['ck', 'K'], ['ng', 'NG'],
     ['qu', 'K W'], ['kn', 'N'], ['wr', 'R'], ['gh', 'G'],
     ['ee', 'IY'], ['ea', 'IY'], ['oo', 'UW'], ['ou', 'AW'], ['ow', 'OW'], ['oi', 'OY'], ['oy', 'OY'],
@@ -186,6 +186,12 @@
         break;
       }
 
+      // Consoante + "le" no fim ("griddle", "bottles"): o "e" não soa e o l fica com a vogal fraca.
+      if (ch === 'l' && next === 'e' && i > 0 && !isV(w[i - 1]) && (i + 2 === w.length || (w[i + 2] === 's' && i + 3 === w.length))) {
+        out.push('AH', 'L');
+        if (i + 3 === w.length) out.push('Z');
+        break;
+      }
       const rule = GUESS_RULES.find((r) => rest.startsWith(r[0]));
       if (rule) {
         out.push(...rule[1].split(' '));
@@ -205,13 +211,18 @@
       else if (SIMPLE[ch]) out.push(...SIMPLE[ch].split(' '));
       i++;
     }
-    // Tonicidade: primeira vogal tônica, as demais átonas.
-    let stressed = false;
-    return out.map((p) => {
-      if (!VOWEL_SET.has(p)) return p;
-      if (!stressed) { stressed = true; return p + '1'; }
-      return p + '0';
-    });
+    // Tonicidade: primeira vogal tônica, as demais átonas. Antes de "-tion"/"-sion" a tônica é a vogal anterior,
+    // e ela é longa: "na·tion" = NEI, "mo·tion" = MOU, "aer·a·tion" = é·REI·chân.
+    let target = out.findIndex((p) => VOWEL_SET.has(p));
+    if (/[ts]ion$/.test(w) && out.length >= 4 && /^(SH|ZH)$/.test(out[out.length - 3])) {
+      const before = out.slice(0, out.length - 3).map((p, k) => (VOWEL_SET.has(p) ? k : -1)).filter((k) => k >= 0).pop();
+      if (before !== undefined) {
+        target = before;
+        const LONGER = { AE: 'EY', AA: 'OW', AH: 'UW', EH: 'IY' };
+        if (LONGER[out[before]] && out[before - 1] !== undefined && !VOWEL_SET.has(out[before - 1])) out[before] = LONGER[out[before]];
+      }
+    }
+    return out.map((p, k) => (VOWEL_SET.has(p) ? p + (k === target ? '1' : '0') : p));
   }
 
   /* ---------------------------------------------------------------- */
@@ -545,39 +556,177 @@
   /* API principal                                                     */
   /* ---------------------------------------------------------------- */
 
-  // Erros do dicionário em palavras do trabalho: a pronúncia certa vai primeiro.
-  const OVERRIDES = {
-    mowing: 'M OW1 IH0 NG', mows: 'M OW1 Z', // o dicionário dá "MAU·ing"
-    vehicle: 'V IY1 IH0 K AH0 L', vehicles: 'V IY1 IH0 K AH0 L Z', // o americano não fala o h
-    // Palavras com duas pronúncias: vai primeiro a que mais aparece numa entrevista de emprego.
-    live: 'L IH1 V', // "I live in..." (o dicionário põe antes o adjetivo, "laiv")
-    read: 'R IY1 D', // "I read the labels" (o dicionário põe antes o passado, "réd")
-    use: 'Y UW1 Z', uses: 'Y UW1 Z IH0 Z', // "I use gloves" (verbo, com som de z)
-    lead: 'L IY1 D', // "lead a team" (o dicionário põe antes o metal, "léd")
-    wind: 'W IH1 N D', // o vento (o dicionário põe antes "dar corda")
-    resume: 'R EH1 Z AH0 M EY2', resumes: 'R EH1 Z AH0 M EY2 Z', // o currículo, não "retomar"
-    permit: 'P ER1 M IH2 T', // "work permit"
-    record: 'R EH1 K ER0 D', records: 'R EH1 K ER0 D Z', // "criminal record"
-    concrete: 'K AA1 N K R IY2 T', // na obra, "KAN·kriit"
-    separate: 'S EH1 P R AH0 T', // "separate room" (adjetivo; o verbo é "SÉ·pâ·reit")
-    coordinate: 'K OW0 AO1 R D AH0 N EY2 T', // "coordinate with the team" (verbo)
-    buffet: 'B AH0 F EY1', buffets: 'B AH0 F EY1 Z', // o bufê, não "golpear"
-    sow: 'S OW1', // semear, não "porca"
-    diesel: 'D IY1 Z AH0 L',
-    advertisement: 'AE2 D V ER0 T AY1 Z M AH0 N T', advertisements: 'AE2 D V ER0 T AY1 Z M AH0 N T S',
-    racehorses: 'R EY1 S HH AO2 R S IH0 Z',
-    converse: 'K AH0 N V ER1 S', reuse: 'R IY0 Y UW1 Z', diffuse: 'D IH0 F Y UW1 Z', // verbos ("converse with guests")
-    baton: 'B AE1 T AH0 N', // Baton Rouge
-    los: 'L AO1 S', // Los Angeles
-    combine: 'K AH0 M B AY1 N', affix: 'AH0 F IH1 K S', traverse: 'T R AH0 V ER1 S', // verbos
-    conflicts: 'K AA1 N F L IH0 K T S', subordinate: 'S AH0 B AO1 R D AH0 N AH0 T', // substantivos
-    subordinates: 'S AH0 B AO1 R D AH0 N AH0 T S',
-    skier: 'S K IY1 ER0', khaki: 'K AE1 K IY0',
-    // Palavras de jardinagem e cozinha que não estão no dicionário.
-    aerate: 'EH1 R EY2 T', aerating: 'EH1 R EY2 T IH0 NG', aeration: 'EH0 R EY1 SH AH0 N',
-    aerator: 'EH1 R EY2 T ER0', aerators: 'EH1 R EY2 T ER0 Z',
-    winterization: 'W IH2 N T ER0 AH0 Z EY1 SH AH0 N', griddle: 'G R IH1 D AH0 L', griddles: 'G R IH1 D AH0 L Z',
+  /* ---------------------------------------------------------------- */
+  /* Palavras com mais de uma pronúncia (o motor escolhe sozinho)       */
+  /* ---------------------------------------------------------------- */
+
+  const bare = (ph) => ph.map((x) => x.replace(/\d$/, ''));
+  const startsWithSound = (ph, prefix) => {
+    const a = bare(ph);
+    const b = bare(prefix);
+    return b.length <= a.length && b.every((x, i) => x === a[i]);
   };
+  const vowelsOf = (ph) => ph.filter((x) => /\d$/.test(x));
+  const primaryIndex = (ph) => vowelsOf(ph).findIndex((x) => x.endsWith('1'));
+  // Consoantes da palavra (o ER conta como R), para achar pares que só mudam a sílaba forte.
+  const skeleton = (ph) => ph.flatMap((x) => (x.startsWith('ER') ? ['R'] : /\d$/.test(x) ? [] : [x])).join(' ');
+  // Mesmo som, ignorando a vogal fraca (AH, IH, IY ou EH átonos): "ri·ZUUM" e "rii·ZUUM" são a mesma leitura.
+  const soundKey = (ph) => ph.map((x) => (/^(AH|IH|IY|EH)[02]$/.test(x) ? '@' : x.replace(/[02]$/, ''))).join(' ');
+
+  /** Formas flexionadas da palavra que o dicionário tem, com o peso de cada uma para achar o verbo. */
+  function familyForms(w) {
+    const stem = w.endsWith('e') ? w.slice(0, -1) : w;
+    const doubled = w + w.charAt(w.length - 1);
+    const forms = [[w + 's', 1], [w + 'es', 1], [w + 'ed', 1], [w + 'd', 1], [doubled + 'ed', 1],
+      // O -ing é a forma mais clara de verbo: vale o dobro.
+      [w + 'ing', 2], [stem + 'ing', 2], [doubled + 'ing', 2]];
+    const seen = new Set();
+    return forms.filter(([f]) => f !== w && !seen.has(f) && seen.add(f) && rawLookup(f));
+  }
+
+  /** A pronúncia do verbo é a que combina com as flexões do próprio dicionário ("living" -> live = liv). */
+  function verbVariant(w, variants) {
+    const groups = new Map();
+    for (const v of variants) {
+      const k = soundKey(v);
+      if (!groups.has(k)) groups.set(k, { v, score: 0 });
+    }
+    if (groups.size < 2) return null;
+    const family = familyForms(w);
+    // Sem a forma -ing no dicionário, a palavra não é verbo ("are", "to", "skier"): fica como está.
+    if (!family.some(([, weight]) => weight === 2)) return null;
+    for (const [form, weight] of family) {
+      const formVariants = rawLookup(form);
+      for (const g of groups.values()) {
+        if (variants.some((v) => soundKey(v) === soundKey(g.v) && formVariants.some((f) => startsWithSound(f, v)))) {
+          g.score += weight;
+        }
+      }
+    }
+    const ranked = [...groups.values()].sort((a, b) => b.score - a.score);
+    if (ranked[0].score <= ranked[1].score) return null;
+    const verb = ranked[0].v;
+    // Uma leitura que é a outra com um som a menos é só fala rápida, não outra palavra:
+    // LÉND·skeip/LÉN·skeip, SÉN·ter/SÉ·ner, kam/kalm, RRAI·er/rrair.
+    const flat = (v) => bare(v).map((x) => (x === 'ER' ? 'R' : x));
+    const reduction = (a, b) => {
+      const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+      let i = 0;
+      for (const x of l) if (x === s[i]) i++;
+      return i === s.length;
+    };
+    if (variants.some((v) => soundKey(v) !== soundKey(verb) && reduction(flat(v), flat(verb)))) return null;
+    return verb;
+  }
+
+  const hasVerbForm = (w) => familyForms(w).some(([, weight]) => weight === 2);
+
+  /**
+   * role: 'verb', 'noun', 'other' (depois de "is", "have": adjetivo ou particípio) ou null (o contexto não diz).
+   * Sem sinal claro, a ordem do dicionário fica, menos nos pares de tônica, em que o substantivo é o mais comum.
+   */
+  function chooseVariant(w, variants, role) {
+    // Palavra com forma fraca ("and" = ând/énd, "to" = tâ/tuu) é palavra de ligação: fica na ordem do dicionário.
+    if (variants.some((v) => primaryIndex(v) < 0)) return null;
+    // Pares que só mudam a sílaba forte (record, permit, contract): substantivo antes, verbo depois.
+    // (Só palavras de 2+ sílabas com tônica nas duas leituras: "to" = tuu/tâ é só a forma fraca.)
+    const stressed = (v) => vowelsOf(v).length > 1 && vowelsOf(v).filter((x) => x.endsWith('1')).length === 1;
+    const pairs = variants.filter((v) => stressed(v) && variants.some((o) => o !== v && stressed(o)
+      && skeleton(o) === skeleton(v) && vowelsOf(o).length === vowelsOf(v).length && primaryIndex(o) !== primaryIndex(v)));
+    // Só palavras que também são verbo ("recording" existe; "yourself" e "effectively", não).
+    if (pairs.length && hasVerbForm(w)) {
+      if (role === 'other' || role === 'start' || role === 'place') return null;
+      // Entre as leituras com a tônica no lugar certo, vale a primeira do dicionário.
+      const target = role === 'verb' ? Math.max(...pairs.map(primaryIndex)) : Math.min(...pairs.map(primaryIndex));
+      return pairs.find((v) => primaryIndex(v) === target);
+    }
+    if (!role || pairs.length) return null;
+    const verb = verbVariant(w, variants);
+    if (!verb) return null;
+    // No começo da frase, a palavra é imperativo: "Use the gloves", "Close the door".
+    if (role === 'verb' || role === 'start' || role === 'place') return verb;
+    // O substantivo (ou adjetivo) precisa aparecer no plural ou no advérbio do dicionário: "uses" tem "iuus",
+    // "lively" tem "laiv", "closely" tem "klous". Se não aparece, as leituras são só variantes de sotaque.
+    const others = variants.filter((v) => soundKey(v) !== soundKey(verb));
+    const stem = w.endsWith('e') ? w.slice(0, -1) : w;
+    const forms = role === 'other' ? [w + 'ly', stem + 'ly'] : [w + 's', w + 'es', w + 'ly', stem + 'ly'];
+    const evidence = forms.map(rawLookup).filter(Boolean).flat();
+    return others.find((o) => evidence.some((f) => startsWithSound(f, o))) || null;
+  }
+
+  /** Põe na frente a pronúncia que o contexto pede; no plural, decide pela palavra no singular ("their lives"). */
+  function orderByContext(w, variants, role) {
+    if (variants.length < 2) return variants;
+    let chosen = chooseVariant(w, variants, role);
+    if (!chosen && w.length > 3 && w.endsWith('s')) {
+      const base = rawLookup(w.slice(0, -1));
+      const one = base && base.length > 1 ? chooseVariant(w.slice(0, -1), base, role) : null;
+      if (one) chosen = variants.find((v) => bare(v).join(' ') === bare(addS(one)).join(' ')) || null;
+    }
+    return chosen ? [chosen].concat(variants.filter((v) => v !== chosen)) : variants;
+  }
+
+  /**
+   * Flexão que não combina com a palavra base ("mowing" = MAU·ing, mas "mow" = MOU): é refeita pela base,
+   * desde que outra forma da mesma família confirme a base ("mowed", "mower").
+   */
+  function alignWithBase(w, hit) {
+    const rules = [['ing', (ph) => ph.concat('IH0', 'NG')], ['es', addS], ['s', addS], ['er', (ph) => ph.concat('ER0')]];
+    for (const [suffix, build] of rules) {
+      if (!w.endsWith(suffix) || w.length < suffix.length + 3) continue;
+      const stem = w.slice(0, -suffix.length);
+      // "-er" só depois de vogal ("ski·er"): "paper", "later" e "cover" não são "pap", "lat" e "cove" + er.
+      const candidates = suffix === 'er'
+        ? (/[aiou]$/.test(stem) ? [stem] : [])
+        : [stem, stem + 'e', undouble(stem)];
+      const bases = candidates.filter((b, i) => candidates.indexOf(b) === i && rawLookup(b));
+      if (!bases.length) continue;
+      const fits = (v) => bases.some((b) => rawLookup(b).some((bv) => startsWithSound(v, bv)));
+      if (fits(hit[0])) return hit;
+      // Outra leitura do dicionário é exatamente a base + o sufixo ("skier" = ski + er): ela vai primeiro.
+      const fitting = hit.find((v) => bases.some((b) => rawLookup(b).some((bv) => bare(v).join(' ') === bare(build(bv)).join(' '))));
+      if (fitting) return [fitting].concat(hit.filter((v) => v !== fitting));
+      // Palavras curtas ficam como estão: "says" e "does" são irregulares, não erros.
+      if (w.length < 5) return hit;
+      const base = bases[0];
+      const rebuilt = build(rawLookup(base)[0]);
+      // Só quando a diferença é uma única vogal trocada (MAU·ing x MOU·ing), não uma palavra diferente.
+      const a = bare(rebuilt);
+      const b = bare(hit[0]);
+      const diff = a.length === b.length ? a.filter((x, i) => x !== b[i]) : null;
+      if (!diff || diff.length !== 1 || !VOWEL_SET.has(diff[0])) return hit;
+      const support = familyForms(base).filter(([f]) => f !== w
+        && rawLookup(f).some((fv) => startsWithSound(fv, rawLookup(base)[0])));
+      return support.length ? [rebuilt].concat(hit) : hit;
+    }
+    return hit;
+  }
+
+  // Contexto que pede verbo: "to use", "I live", "can lead", "always use".
+  const VERB_CONTEXT = new Set(['to', 'i', 'you', 'we', 'they', 'he', 'she', 'it', 'who', 'can', 'could', 'will',
+    'would', 'should', 'must', 'may', 'might', 'do', 'does', 'did', "don't", "doesn't", "didn't", "can't", 'cannot',
+    "won't", 'not', 'never', 'always', 'also', 'usually', 'often', 'sometimes', 'really', 'just', 'still', 'please',
+    'and', 'or', "i'll", "we'll", "you'll", "they'll", "i'd", "we'd", 'people', 'children', 'men', 'women']);
+  // Depois de "is" ou "have" vem adjetivo ou particípio: "is close", "have read".
+  const OTHER_CONTEXT = new Set(['am', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', "i've", "we've",
+    "you've", "it's", "i'm", "you're", "we're", "they're"]);
+  // No começo da frase, artigo ou pronome depois indica imperativo: "Use the...", "Record your...".
+  const DETERMINERS = new Set(['the', 'a', 'an', 'my', 'your', 'his', 'her', 'our', 'their', 'this', 'that', 'these',
+    'those', 'it', 'them', 'me', 'us', 'him', 'some', 'all', 'any', 'every', 'each']);
+
+  const PLACE_WORDS = new Set(['in', 'on', 'at', 'with', 'near', 'here', 'there', 'from']);
+
+  function contextRole(prev, next, atStart) {
+    if (prev && VERB_CONTEXT.has(prev)) return 'verb';
+    if (prev && OTHER_CONTEXT.has(prev)) return 'other';
+    if (prev && DETERMINERS.has(prev)) return 'noun'; // "the wind", "my resume", "a separate room"
+    if (next && DETERMINERS.has(next)) return 'verb'; // "use the", "record your"
+    // Depois de um sujeito no plural vem o verbo: "employees use", "workers record".
+    if (prev && prev.length > 3 && /[^s']s$/.test(prev)) return 'verb';
+    if (!prev && atStart) return 'start';
+    // Antes de "in", "here", "with": verbo ("my sister live in"); o adjetivo viria antes de um substantivo.
+    return next && PLACE_WORDS.has(next) ? 'place' : null;
+  }
 
   // Abreviações de anúncio de vaga, lidas por extenso.
   const ABBREVIATIONS = { hr: 'hour', hrs: 'hours', yr: 'year', yrs: 'years', wk: 'week', wks: 'weeks',
@@ -632,10 +781,7 @@
       return pronounce(CAPITAL_ABBREVIATIONS[title]);
     }
     let hit = rawLookup(w);
-    if (OVERRIDES[w]) {
-      const first = OVERRIDES[w].split(' ');
-      hit = [first].concat((hit || []).filter((v) => v.join(' ') !== OVERRIDES[w]));
-    }
+    if (hit) hit = alignWithBase(w, hit);
     // O dicionário tem alguns possessivos sem o s final ("cabela's"): completa.
     if (hit && w.endsWith("'s")) hit = hit.map((v) => (/^[SZ]$/.test(v[v.length - 1]) ? v : addS(v)));
     if (hit) return { source: 'dict', variants: hit };
@@ -739,6 +885,13 @@
         // "used to" (costumava, acostumado) tem som de s: "iuust tu". Fora disso, "used" é "iuuzd".
         if (/^used$/i.test(piece) && /^\s+$/.test(matches[mi + 1] || '') && /^to$/i.test(matches[mi + 2] || '')) {
           res = { source: 'dict', variants: [['Y', 'UW1', 'S', 'T']] };
+        }
+        // Palavra com mais de uma pronúncia: as palavras vizinhas dizem se é verbo ou substantivo.
+        if (res.source === 'dict' && res.variants.length > 1) {
+          const before = prev && /^[ \t]+$/.test(prev.text) && prev2 && /^[A-Za-z']+$/.test(prev2.text) ? prev2.text.toLowerCase() : null;
+          const after = /^[ \t]+$/.test(matches[mi + 1] || '') && /^[A-Za-z']+$/.test(matches[mi + 2] || '')
+            ? matches[mi + 2].toLowerCase() : null;
+          res = { source: res.source, variants: orderByContext(piece.toLowerCase(), res.variants, contextRole(before, after, wasStart)) };
         }
         // Nome no meio da frase fora do dicionário ("Pessoa") ou logo depois de um nome mantido
         // ("São Paulo"): fica como está escrito.

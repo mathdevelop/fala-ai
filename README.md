@@ -19,6 +19,11 @@ e abra http://localhost:5173.
 ## Como funciona
 
 1. Cada palavra é procurada no [CMU Pronouncing Dictionary](http://www.speech.cs.cmu.edu/cgi-bin/cmudict) (inglês americano, ~126 mil palavras).
+   Quando o dicionário tem mais de uma pronúncia, o motor escolhe sozinho, sem lista de exceções:
+   - as palavras vizinhas dizem se é verbo ou substantivo ("I **live**" = liv, "the show is **live**" = laiv);
+   - as flexões do próprio dicionário dizem qual pronúncia é a do verbo ("living" mostra que o verbo é liv);
+   - nos pares que só mudam a sílaba forte vale a regra do inglês: "a **RÉ**·kerd", "to râ·**KÓRD**";
+   - uma flexão que não combina com a palavra base é refeita por ela ("mowing" vem de "mow").
 2. Os fonemas são separados em sílabas.
 3. Cada fonema vira uma grafia que um brasileiro lê naturalmente (`js/converter.js`, função `spell`).
 
