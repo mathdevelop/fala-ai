@@ -428,13 +428,22 @@
 
   function numberToWords(text) {
     const clean = text.replace(/,(?=\d{3})/g, '').replace(',', '.');
-    const [intPart, decPart] = clean.split('.');
+    const intPart = clean.split('.')[0];
+    const decPart = (clean.split('.')[1] || '').replace(/\D.*$/, '');
     let words;
     if (intPart.length > 12) words = intPart.split('').map((d) => ONES[Number(d)]);
     else words = intToWords(Number(intPart));
-    if (decPart) words = words.concat('point', decPart.split('').map((d) => ONES[Number(d)]));
+    // "100.00" = one hundred: casas decimais zeradas não se falam.
+    if (decPart && /[1-9]/.test(decPart)) words = words.concat('point', decPart.split('').map((d) => ONES[Number(d)]));
     return words;
   }
+
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+    'November', 'December'];
+  const FRACTIONS = { '1/2': ['one', 'half'], '1/3': ['one', 'third'], '1/4': ['one', 'quarter'],
+    '2/3': ['two', 'thirds'], '3/4': ['three', 'quarters'], '½': ['one', 'half'], '⅓': ['one', 'third'],
+    '¼': ['one', 'quarter'], '⅔': ['two', 'thirds'], '¾': ['three', 'quarters'] };
+  const DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})$/;
 
   const ORDINAL = { one: 'first', two: 'second', three: 'third', five: 'fifth', eight: 'eighth', nine: 'ninth',
     twelve: 'twelfth' };
@@ -444,12 +453,65 @@
     return word.endsWith('y') ? word.slice(0, -1) + 'ieth' : word + 'th';
   }
 
-  const NUMBER_RE = /^(\$?)(\d+(?:[.,]\d+)*)(?::(\d\d))?(%|[a-z]+)?$/i;
+  const NUMBER_RE = /^(\$ ?)?(\d+(?:,\d{3})*(?:\.\d+)?)(?::(\d\d))?(%|[a-z]+)?$/i;
+  // Telefone americano: "(516) 934-8578", "631-668-4400", "603 444-6245", "934-8578".
+  const PHONE_RE = /^(?:\(\d{3}\) ?|\d{3}[-. ])?\d{3}[-.]\d{4}(?!\d)$/;
+  const DIGIT_NAMES = ['oh', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
-  /** "$15.50", "7:30", "1st", "90s", "10%", "5pm" -> palavras em inglês, como se fala. */
-  function spokenNumber(piece) {
+  /** "web.matheus@gmail.com" -> "web dot M A T H E U S at gmail dot com": palavra do dicionário é lida, o resto soletrado. */
+  function emailWords(piece) {
+    const out = [];
+    const symbols = { '@': 'at', '.': 'dot', '_': 'underscore', '-': 'dash', '+': 'plus' };
+    for (const part of piece.split(/([@._+-])/)) {
+      if (!part) continue;
+      if (symbols[part]) out.push(pronounce(symbols[part]).variants[0]);
+      else if (rawLookup(part.toLowerCase())) out.push(pronounce(part.toLowerCase()).variants[0]);
+      else {
+        for (const ch of part.toLowerCase()) {
+          out.push(/\d/.test(ch) ? pronounce(ONES[Number(ch)]).variants[0] : LETTER_NAMES[ch].split(' '));
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Número de formulário ou código: "DS-160" = one sixty, "ETA-9142" = ninety-one forty-two, "401k" = four oh one. */
+  function codeNumber(digits) {
+    const tail = (lo) => (lo === 0 ? ['hundred'] : lo < 10 ? ['oh', ONES[lo]] : intToWords(lo));
+    if (/^[1-9]\d\d$/.test(digits)) return [ONES[Number(digits[0])]].concat(tail(Number(digits.slice(1))));
+    if (/^[1-9]\d{3}$/.test(digits)) return intToWords(Number(digits.slice(0, 2))).concat(tail(Number(digits.slice(2))));
+    return numberToWords(digits);
+  }
+
+  /** "$15.50", "7:30", "1st", "90s", "10%", "5pm", "3/25/26", "1/2" -> palavras em inglês, como se fala. */
+  function spokenNumber(piece, code) {
+    if (FRACTIONS[piece]) return FRACTIONS[piece].slice();
+    if (code && /^\d+$/.test(piece)) return codeNumber(piece);
+    // Só centavos: "$.20" = twenty cents.
+    const cents = /^\$\.(\d+)$/.exec(piece);
+    if (cents) {
+      const c = Number(cents[1].padEnd(2, '0').slice(0, 2));
+      return intToWords(c).concat(c === 1 ? 'cent' : 'cents');
+    }
+    // Data americana (mês/dia/ano): "3/25/26" = March twenty-fifth, twenty twenty-six.
+    const date = DATE_RE.exec(piece);
+    if (date) {
+      const [month, day] = [Number(date[1]), Number(date[2])];
+      const year = date[3].length === 2 ? '20' + date[3] : date[3];
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const dayWords = intToWords(day);
+        dayWords[dayWords.length - 1] = toOrdinal(dayWords[dayWords.length - 1]);
+        return [MONTHS[month - 1]].concat(dayWords, spokenNumber(year));
+      }
+      return [].concat(...piece.split('/').map((part) => numberToWords(part)));
+    }
+    // Telefone, com ou sem traços (7, 10 ou 11 dígitos), é lido dígito a dígito; "1000000" continua um milhão.
+    // Também o número que começa com zero, como o CEP "02601".
+    if (PHONE_RE.test(piece) || /^0\d+$/.test(piece) || (/^(?:\d{7}|\d{10,11})$/.test(piece) && !piece.endsWith('000'))) {
+      return piece.replace(/\D/g, '').split('').map((d) => DIGIT_NAMES[Number(d)]);
+    }
     const m = NUMBER_RE.exec(piece);
-    const money = m[1] === '$';
+    const money = !!m[1];
     const suffix = (m[4] || '').toLowerCase();
     let words;
     if (m[3] !== undefined) {
@@ -483,6 +545,58 @@
   /* API principal                                                     */
   /* ---------------------------------------------------------------- */
 
+  // Erros do dicionário em palavras do trabalho: a pronúncia certa vai primeiro.
+  const OVERRIDES = {
+    mowing: 'M OW1 IH0 NG', mows: 'M OW1 Z', // o dicionário dá "MAU·ing"
+    vehicle: 'V IY1 IH0 K AH0 L', vehicles: 'V IY1 IH0 K AH0 L Z', // o americano não fala o h
+    // Palavras com duas pronúncias: vai primeiro a que mais aparece numa entrevista de emprego.
+    live: 'L IH1 V', // "I live in..." (o dicionário põe antes o adjetivo, "laiv")
+    read: 'R IY1 D', // "I read the labels" (o dicionário põe antes o passado, "réd")
+    use: 'Y UW1 Z', uses: 'Y UW1 Z IH0 Z', // "I use gloves" (verbo, com som de z)
+    lead: 'L IY1 D', // "lead a team" (o dicionário põe antes o metal, "léd")
+    wind: 'W IH1 N D', // o vento (o dicionário põe antes "dar corda")
+    resume: 'R EH1 Z AH0 M EY2', resumes: 'R EH1 Z AH0 M EY2 Z', // o currículo, não "retomar"
+    permit: 'P ER1 M IH2 T', // "work permit"
+    record: 'R EH1 K ER0 D', // "criminal record"
+    // Palavras de jardinagem e cozinha que não estão no dicionário.
+    aerate: 'EH1 R EY2 T', aerating: 'EH1 R EY2 T IH0 NG', aeration: 'EH0 R EY1 SH AH0 N',
+    aerator: 'EH1 R EY2 T ER0', aerators: 'EH1 R EY2 T ER0 Z',
+    winterization: 'W IH2 N T ER0 AH0 Z EY1 SH AH0 N', griddle: 'G R IH1 D AH0 L', griddles: 'G R IH1 D AH0 L Z',
+  };
+
+  // Abreviações de anúncio de vaga, lidas por extenso.
+  const ABBREVIATIONS = { hr: 'hour', hrs: 'hours', yr: 'year', yrs: 'years', wk: 'week', wks: 'weeks',
+    wknd: 'weekend', wknds: 'weekends', mins: 'minutes', approx: 'approximately', ft: 'feet', yd: 'yard',
+    yds: 'yards', sq: 'square', attn: 'attention' };
+  // Prefixos: no composto a tônica fica na segunda parte ("pre·apPROVED").
+  const PREFIXES = new Set(['pre', 're', 'un', 'non', 'mis', 'sub', 'co']);
+  // Dias e meses abreviados, só com a inicial maiúscula ("Mon-Sun", "Sep"): "sun" e "sat" minúsculos são palavras.
+  const CAPITAL_ABBREVIATIONS = { Mon: 'Monday', Tue: 'Tuesday', Tues: 'Tuesday', Wed: 'Wednesday',
+    Thu: 'Thursday', Thur: 'Thursday', Thurs: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday',
+    Feb: 'February', Apr: 'April', Jun: 'June', Jul: 'July', Aug: 'August', Sep: 'September', Sept: 'September',
+    Oct: 'October', Nov: 'November', Dec: 'December',
+    Rd: 'road', Ave: 'avenue', Hwy: 'highway', Ln: 'lane', Ste: 'suite', Apt: 'apartment', Pkwy: 'parkway' };
+  // Palavras curtas comuns que, em texto todo em maiúsculas ("UP TO", "IS"), não são siglas.
+  const CAPS_WORDS = new Set(['TO', 'OF', 'IS', 'IN', 'OR', 'BE', 'UP', 'ON', 'AT', 'AN', 'AS', 'BY', 'DO', 'GO',
+    'HE', 'IF', 'ME', 'MY', 'NO', 'SO', 'WE']);
+
+  /** "worksite", "jobsites": duas palavras do dicionário juntas. Escolhe o corte com as partes mais equilibradas. */
+  function compound(w) {
+    let best = null;
+    const demote = (ph) => ph.map((x) => x.replace(/1$/, '2'));
+    for (let k = 3; k + 3 <= w.length; k++) {
+      const a = rawLookup(w.slice(0, k));
+      const bHit = rawLookup(w.slice(k));
+      const b = bHit ? bHit[0] : inflected(w.slice(k));
+      const size = Math.min(k, w.length - k);
+      if (a && b && (!best || size > best.size)) {
+        // A segunda parte perde a tônica principal ("WORK·site"); depois de prefixo, é a primeira ("prii·â·PRUUVD").
+        best = { size, ph: PREFIXES.has(w.slice(0, k)) ? demote(a[0]).concat(b) : a[0].concat(demote(b)) };
+      }
+    }
+    return best && best.ph;
+  }
+
   /**
    * Pronúncias de uma palavra.
    * Retorna { source: 'dict' | 'guess', variants: [ [fonemas...] ] }
@@ -490,11 +604,22 @@
   function pronounce(word) {
     const w = word.toLowerCase().replace(/[’‘`]/g, "'");
     // Siglas de 2 letras viram letras mesmo quando são palavras: "the US", "IT", "7 AM".
-    if (/^[A-Z]{2}$/.test(word)) {
+    if (/^[A-Z]{2}$/.test(word) && !CAPS_WORDS.has(word)) {
       return { source: 'dict', variants: [[...LETTER_NAMES[w[0]].split(' '), ...LETTER_NAMES[w[1]].split(' ')]] };
     }
     if (word === 'Dr') return pronounce('doctor');
+    if (ABBREVIATIONS[w]) return pronounce(ABBREVIATIONS[w]);
+    if (CAPITAL_ABBREVIATIONS[word]) return pronounce(CAPITAL_ABBREVIATIONS[word]);
+    // Em maiúsculas ("MON-FRI", "AVE"), menos SAT, SUN e WED, que também são palavras ("THE SUN").
+    const title = word.charAt(0) + word.slice(1).toLowerCase();
+    if (/^[A-Z]{3,5}$/.test(word) && CAPITAL_ABBREVIATIONS[title] && !['SAT', 'SUN', 'WED'].includes(word)) {
+      return pronounce(CAPITAL_ABBREVIATIONS[title]);
+    }
     let hit = rawLookup(w);
+    if (OVERRIDES[w]) {
+      const first = OVERRIDES[w].split(' ');
+      hit = [first].concat((hit || []).filter((v) => v.join(' ') !== OVERRIDES[w]));
+    }
     // O dicionário tem alguns possessivos sem o s final ("cabela's"): completa.
     if (hit && w.endsWith("'s")) hit = hit.map((v) => (/^[SZ]$/.test(v[v.length - 1]) ? v : addS(v)));
     if (hit) return { source: 'dict', variants: hit };
@@ -507,14 +632,23 @@
       return { source: 'guess', variants: [spelled] };
     }
     if (w.length === 1 && LETTER_NAMES[w]) return { source: 'guess', variants: [LETTER_NAMES[w].split(' ')] };
+    // No plural, corta a palavra sem o s ("jobsite·s"), para não sair "jobs·ites".
+    const singular = w.length > 6 && w.endsWith('s') ? compound(w.slice(0, -1)) : null;
+    const joined = singular ? addS(singular) : compound(w);
+    if (joined) return { source: 'guess', variants: [joined] };
     return { source: 'guess', variants: [guess(w)] };
   }
 
   // Letras com acento entram na palavra ("João"), para ela não ser cortada no meio.
   const TOKEN_RE = new RegExp(
-    "[ap]\\.m\\.|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ]+)*" +
-    '|\\$?\\d+(?:[.,]\\d+)*(?::\\d\\d)?(?:%|(?:st|nd|rd|th|s|am|pm)(?![A-Za-z]))?' +
-    '|\\s+|[^\\sA-Za-zÀ-ÖØ-öø-ÿ\\d]+', 'gi');
+    '[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+|[½⅓¼⅔¾]|' +
+    "[ap]\\.m\\.|e\\.g\\.|i\\.e\\.|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ]+)*" +
+    '|\\d{1,2}/\\d{1,2}/(?:\\d{4}|\\d{2})(?![\\d/])|(?:1/[234]|2/3|3/4)(?![\\d/])' +
+    '|' + PHONE_RE.source.slice(1, -1) +
+    // Vírgula só como separador de milhar ("1,200"); "87,71,89" é uma lista de números.
+    '|\\$\\.\\d+|\\$ ?\\d+(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:,\\d{3})*(?:\\.\\d+)?(?::\\d\\d)?(?:%|(?:st|nd|rd|th|s|am|pm)(?![A-Za-z]))?' +
+    // O "$" antes de um número fica para o número: "($300", "-$35", "$.20".
+    '|\\s+|(?:(?!\\$ ?\\.?\\d)[^\\sA-Za-zÀ-ÖØ-öø-ÿ\\d])+', 'gi');
 
   /**
    * Converte um texto inteiro.
@@ -534,7 +668,16 @@
       if (tokens.length && tokens[tokens.length - 1].type === 'word') tokens.push({ type: 'sep', text: '-' });
       tokens.push(tok);
     };
-    for (const raw of matches) {
+    for (let mi = 0; mi < matches.length; mi++) {
+      const raw = matches[mi];
+      try {
+        convertPiece(raw, mi);
+      } catch (err) {
+        // Um pedaço que o motor não entende fica como está escrito, em vez de derrubar o texto todo.
+        tokens.push({ type: 'sep', text: raw });
+      }
+    }
+    function convertPiece(raw, mi) {
       const wasStart = sentenceStart;
       const wasAfterNumber = afterNumber;
       if (/\S/.test(raw)) {
@@ -543,22 +686,50 @@
       } else if (/\n/.test(raw)) {
         sentenceStart = true;
       }
-      const piece = /^[ap]\.m\.$/i.test(raw) || (wasAfterNumber && /^[ap]m$/i.test(raw))
+      const prev = tokens[tokens.length - 1];
+      const prev2 = tokens[tokens.length - 2];
+      let piece = /^[ap]\.m\.$/i.test(raw) || (wasAfterNumber && /^[ap]m$/i.test(raw))
         ? raw.replace(/\./g, '').toUpperCase() : raw;
+      // "$17.40/HR", "40 HOURS/WK": depois da barra é unidade, não sigla.
+      if (prev && prev.text.endsWith('/') && /^[A-Z]{2,4}$/.test(piece) && ABBREVIATIONS[piece.toLowerCase()]) {
+        piece = piece.toLowerCase();
+      }
+      // "$17.40-18.40", "$12.84 - 17.78": o segundo valor da faixa também é em dólares.
+      if (/^\d/.test(piece)) {
+        const back = [];
+        for (let i = tokens.length - 1; i >= 0 && back.length < 2; i--) if (/\S/.test(tokens[i].text)) back.unshift(tokens[i]);
+        if (back.length === 2 && /^[-–]$/.test(back[1].text) && back[0].money) piece = '$' + piece;
+      }
       const wasKept = keptName;
       if (/\S/.test(raw)) keptName = false;
-      if (/[À-ÖØ-öø-ÿ]/.test(piece) || (opts.keep && opts.keep.has(piece.toLowerCase()))) {
+      if (/^(?:e\.g|i\.e)\.$/i.test(piece)) {
+        const words = (/^e/i.test(piece) ? ['for', 'example'] : ['that', 'is']).map((w) => toSyllables(pronounce(w).variants[0], opts));
+        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words }] });
+      } else if (piece.includes('@')) {
+        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words: emailWords(piece).map((ph) => toSyllables(ph, opts)) }] });
+      } else if (FRACTIONS[piece]) {
+        const words = FRACTIONS[piece].map((w) => toSyllables(pronounce(w).variants[0], opts));
+        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words }] });
+      } else if (/[À-ÖØ-öø-ÿ]/.test(piece) || (opts.keep && opts.keep.has(piece.toLowerCase()))) {
         // Palavra com acento é português ("João", "São"), e opts.keep traz nomes a manter: ficam como estão.
         tokens.push({ type: 'sep', text: raw, kept: true });
         keptName = true;
       } else if (/^[A-Za-z]/.test(piece)) {
-        const res = pronounce(piece);
+        // "MON-SUN": SAT, SUN e WED em maiúsculas só são dias quando estão numa faixa com hífen.
+        if (/^(?:SAT|SUN|WED)$/.test(piece) && ((prev && /^[-–]$/.test(prev.text)) || /^[-–]$/.test(matches[mi + 1] || ''))) {
+          piece = piece.charAt(0) + piece.slice(1).toLowerCase();
+        }
+        let res = pronounce(piece);
+        // "used to" (costumava, acostumado) tem som de s: "iuust tu". Fora disso, "used" é "iuuzd".
+        if (/^used$/i.test(piece) && /^\s+$/.test(matches[mi + 1] || '') && /^to$/i.test(matches[mi + 2] || '')) {
+          res = { source: 'dict', variants: [['Y', 'UW1', 'S', 'T']] };
+        }
         // Nome no meio da frase fora do dicionário ("Pessoa") ou logo depois de um nome mantido
         // ("São Paulo"): fica como está escrito.
         if (/^[A-Z][a-z]/.test(piece) && (wasKept || (res.source === 'guess' && !wasStart))) {
           tokens.push({ type: 'sep', text: raw, kept: true });
           keptName = true;
-          continue;
+          return;
         }
         const seen = new Set();
         const variants = [];
@@ -572,9 +743,13 @@
         }
         if (variants.length) pushWord({ type: 'word', text: raw, source: res.source, variants });
         else tokens.push({ type: 'sep', text: raw });
-      } else if (/^\$?\d/.test(piece)) {
-        const words = spokenNumber(piece).map((w) => toSyllables(pronounce(w).variants[0], opts));
-        pushWord({ type: 'word', text: piece, source: 'dict', variants: [{ words }] });
+      } else if (/^(?:\$ ?\.?|\()?\d/.test(piece)) {
+        // Número de formulário depois de sigla e hífen ("DS-160", "ETA-9142") e o "401k".
+        const code = (prev && prev.text === '-' && prev2 && prev2.type === 'word' && /^[A-Z]+$/.test(prev2.text))
+          || (piece === '401' && (/^k$/i.test(matches[mi + 1] || '')
+            || (matches[mi + 1] === '(' && /^k$/i.test(matches[mi + 2] || ''))));
+        const words = spokenNumber(piece, code).map((w) => toSyllables(pronounce(w).variants[0], opts));
+        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words }], money: piece.startsWith('$') });
       } else {
         tokens.push({ type: 'sep', text: piece });
       }
