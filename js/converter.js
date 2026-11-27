@@ -812,6 +812,47 @@
     // O "$" antes de um número fica para o número: "($300", "-$35", "$.20".
     '|\\s+|(?:(?!\\$ ?\\.?\\d)[^\\sA-Za-zÀ-ÖØ-öø-ÿ\\d])+', 'gi');
 
+  const DAY_WORDS = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'mon', 'tue',
+    'tues', 'wed', 'thu', 'thur', 'thurs', 'fri', 'sat', 'sun']);
+
+  /**
+   * Faixas: o traço entre dois números, valores, horários ou dias se lê "to" ("1-5" = one to five,
+   * "Monday-Friday", "8am – 4pm"). Códigos ("DS-160", "SOC 37-3011") e telefones ficam como estão.
+   */
+  function readRanges(tokens, opts) {
+    const solid = (i, step) => {
+      for (let k = i + step; k >= 0 && k < tokens.length; k += step) if (/\S/.test(tokens[k].text)) return k;
+      return -1;
+    };
+    const isDay = (t) => t && t.type === 'word' && DAY_WORDS.has(t.text.toLowerCase());
+    const endsTime = (k) => {
+      // "7:00 AM - 7:00 PM": o AM/PM depois de um número fecha o horário da esquerda.
+      const t = tokens[k];
+      if (!t || t.type !== 'word' || !/^[ap]\.?m\.?$/i.test(t.text)) return false;
+      const before = tokens[solid(k, -1)];
+      return !!before && before.number;
+    };
+    const to = { type: 'word', text: 'to', source: 'dict', variants: [{ words: [toSyllables(pronounce('to').variants[0], opts)] }] };
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].type !== 'sep' || !/^(?:-|–|—|--)$/.test(tokens[i].text)) continue;
+      const l = solid(i, -1);
+      const r = solid(i, 1);
+      if (l < 0 || r < 0) continue;
+      const left = tokens[l];
+      const right = tokens[r];
+      let range = (isDay(left) && isDay(right)) || ((left.number || endsTime(l)) && right.number);
+      // Dois números simples: a faixa sobe e os dois têm tamanho parecido ("5-10", não o código "37-3011").
+      const plain = /^(\d+)(?:\.\d+)?$/;
+      if (range && plain.test(left.text) && plain.test(right.text)) {
+        const [a, b] = [plain.exec(left.text)[1], plain.exec(right.text)[1]];
+        range = Number(right.text) > Number(left.text) && b.length - a.length <= 1;
+      }
+      if (!range) continue;
+      tokens.splice(l + 1, r - l - 1, { type: 'sep', text: ' ' }, to, { type: 'sep', text: ' ' });
+      i = l + 3;
+    }
+  }
+
   /**
    * Converte um texto inteiro.
    * Retorna tokens:
@@ -918,11 +959,13 @@
           || (piece === '401' && (/^k$/i.test(matches[mi + 1] || '')
             || (matches[mi + 1] === '(' && /^k$/i.test(matches[mi + 2] || ''))));
         const words = spokenNumber(piece, code).map((w) => toSyllables(pronounce(w).variants[0], opts));
-        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words }], money: piece.startsWith('$') });
+        pushWord({ type: 'word', text: raw, source: 'dict', variants: [{ words }], money: piece.startsWith('$'),
+          number: !code });
       } else {
         tokens.push({ type: 'sep', text: piece });
       }
     }
+    readRanges(tokens, opts);
     // "Rio de Janeiro", "Silva da Costa": de/da/do/dos/das entre duas palavras com maiúscula é nome em português.
     const keep = (tok) => ({ type: 'sep', text: tok.text, kept: true });
     const capital = (tok) => tok && (tok.type === 'word' || tok.kept) && /^[A-Z][a-z]/.test(tok.text);
