@@ -26,7 +26,7 @@
     ['â apagado', 'Nas sílabas fracas o â aparece mais claro: é curtíssimo e quase some. Nunca abra para “a”.', ['today', 'about', 'police']],
     ['d entre vogais', 'No inglês americano o “t” entre vogais vira um “d” leve e rápido, quase o “r” de “caro”.', ['water', 'city', 'better']],
     ['tn · pl', 'Sem vogal no meio: passe direto de uma consoante para a outra, sem acrescentar som.', ['button', 'people', 'little']],
-    ['t · p · k', 'No começo da palavra ou da sílaba forte, saem com um sopro de ar. Por isso o “t” de “today” pode parecer “tch”: mantenha a língua no lugar do “t” e só solte o ar.', ['today', 'time', 'park']],
+    ['t · p · k', 'No começo da sílaba forte, saem com um sopro de ar logo depois da consoante.', ['time', 'park', 'key']],
     ['rr', 'O “r” de “rato” ou “carro”: um sopro vindo da garganta.', ['house', 'hello']],
     ['r', 'Sempre o “r” do interior (“porta” caipira), com a língua enrolada para trás — mesmo no começo da palavra.', ['red', 'car']],
     ['âr · er', 'O mesmo “r” do interior, emendado na vogal.', ['bird', 'teacher']],

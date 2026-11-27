@@ -431,38 +431,10 @@
    * Pronúncias de uma palavra.
    * Retorna { source: 'dict' | 'guess', variants: [ [fonemas...] ] }
    */
-  /** Variante igual à primeira, só que com "u" (UW0) no lugar de uma vogal fraca (AH0). */
-  function isRoundedOf(base, other) {
-    if (base.length !== other.length) return false;
-    let diffs = 0;
-    for (let i = 0; i < base.length; i++) {
-      if (base[i] === other[i]) continue;
-      if (base[i] !== 'AH0' || other[i] !== 'UW0') return false;
-      diffs++;
-    }
-    return diffs === 1;
-  }
-
-  /**
-   * "today", "tomorrow", "document": a vogal fraca aí soa como um "u" curto para o brasileiro.
-   * Mostra primeiro a variante com "u" e mantém a outra como alternativa.
-   */
-  function preferRounded(w, variants) {
-    const list = variants.slice();
-    const first = list[0];
-    // "to-" (today, together, tonight): a vogal fraca puxa para "u".
-    if (w.startsWith('to') && first[0] === 'T' && first[1] === 'AH0' && !list.some((v) => isRoundedOf(first, v))) {
-      list.push(['T', 'UW0'].concat(first.slice(2)));
-    }
-    const idx = list.findIndex((v, i) => i > 0 && isRoundedOf(first, v));
-    if (idx > 0) list.unshift(list.splice(idx, 1)[0]);
-    return list;
-  }
-
   function pronounce(word) {
     const w = word.toLowerCase().replace(/[’‘`]/g, "'");
     let hit = rawLookup(w);
-    if (hit) return { source: 'dict', variants: preferRounded(w, hit) };
+    if (hit) return { source: 'dict', variants: hit };
     const viaInflection = inflected(w);
     if (viaInflection) return { source: 'dict', variants: [viaInflection] };
     // Siglas em maiúsculas (ex.: "NBA"): soletra.
