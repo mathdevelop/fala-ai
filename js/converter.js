@@ -557,7 +557,18 @@
     wind: 'W IH1 N D', // o vento (o dicionário põe antes "dar corda")
     resume: 'R EH1 Z AH0 M EY2', resumes: 'R EH1 Z AH0 M EY2 Z', // o currículo, não "retomar"
     permit: 'P ER1 M IH2 T', // "work permit"
-    record: 'R EH1 K ER0 D', // "criminal record"
+    record: 'R EH1 K ER0 D', records: 'R EH1 K ER0 D Z', // "criminal record"
+    concrete: 'K AA1 N K R IY2 T', // na obra, "KAN·kriit"
+    separate: 'S EH1 P R AH0 T', // "separate room" (adjetivo; o verbo é "SÉ·pâ·reit")
+    coordinate: 'K OW0 AO1 R D AH0 N EY2 T', // "coordinate with the team" (verbo)
+    buffet: 'B AH0 F EY1', buffets: 'B AH0 F EY1 Z', // o bufê, não "golpear"
+    sow: 'S OW1', // semear, não "porca"
+    diesel: 'D IY1 Z AH0 L',
+    advertisement: 'AE2 D V ER0 T AY1 Z M AH0 N T', advertisements: 'AE2 D V ER0 T AY1 Z M AH0 N T S',
+    racehorses: 'R EY1 S HH AO2 R S IH0 Z',
+    converse: 'K AH0 N V ER1 S', reuse: 'R IY0 Y UW1 Z', diffuse: 'D IH0 F Y UW1 Z', // verbos ("converse with guests")
+    baton: 'B AE1 T AH0 N', // Baton Rouge
+    los: 'L AO1 S', // Los Angeles
     // Palavras de jardinagem e cozinha que não estão no dicionário.
     aerate: 'EH1 R EY2 T', aerating: 'EH1 R EY2 T IH0 NG', aeration: 'EH0 R EY1 SH AH0 N',
     aerator: 'EH1 R EY2 T ER0', aerators: 'EH1 R EY2 T ER0 Z',
