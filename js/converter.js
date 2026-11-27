@@ -569,6 +569,10 @@
     converse: 'K AH0 N V ER1 S', reuse: 'R IY0 Y UW1 Z', diffuse: 'D IH0 F Y UW1 Z', // verbos ("converse with guests")
     baton: 'B AE1 T AH0 N', // Baton Rouge
     los: 'L AO1 S', // Los Angeles
+    combine: 'K AH0 M B AY1 N', affix: 'AH0 F IH1 K S', traverse: 'T R AH0 V ER1 S', // verbos
+    conflicts: 'K AA1 N F L IH0 K T S', subordinate: 'S AH0 B AO1 R D AH0 N AH0 T', // substantivos
+    subordinates: 'S AH0 B AO1 R D AH0 N AH0 T S',
+    skier: 'S K IY1 ER0', khaki: 'K AE1 K IY0',
     // Palavras de jardinagem e cozinha que não estão no dicionário.
     aerate: 'EH1 R EY2 T', aerating: 'EH1 R EY2 T IH0 NG', aeration: 'EH0 R EY1 SH AH0 N',
     aerator: 'EH1 R EY2 T ER0', aerators: 'EH1 R EY2 T ER0 Z',
@@ -619,6 +623,7 @@
       return { source: 'dict', variants: [[...LETTER_NAMES[w[0]].split(' '), ...LETTER_NAMES[w[1]].split(' ')]] };
     }
     if (word === 'Dr') return pronounce('doctor');
+    if (w === 'www') return { source: 'dict', variants: [[].concat(...[0, 1, 2].map(() => LETTER_NAMES.w.split(' ')))] };
     if (ABBREVIATIONS[w]) return pronounce(ABBREVIATIONS[w]);
     if (CAPITAL_ABBREVIATIONS[word]) return pronounce(CAPITAL_ABBREVIATIONS[word]);
     // Em maiúsculas ("MON-FRI", "AVE"), menos SAT, SUN e WED, que também são palavras ("THE SUN").
